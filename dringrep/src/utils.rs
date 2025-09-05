@@ -2,7 +2,7 @@ use colored::Colorize;
 
 extern crate num_cpus;
 
-use crate::{Config, FileResult, search};
+use crate::{Config, FileResult, process_lines};
 use crate::{ThreadPool, count_matches};
 use std::fs::{self, File};
 
@@ -25,9 +25,6 @@ pub fn print_results(rx: mpsc::Receiver<FileResult>, config: Arc<Config>) {
                     println!("Number of matched lines found: {count_matches:?}");
                 }
 
-                if config.file_name_if_matches && v.len() > 0 {
-                    println!("File name: {}", config.file_path)
-                }
                 for (key, value) in &v {
                     let config = Arc::clone(&config);
                     print_each_result(config, &n, (*key, value));
@@ -87,7 +84,13 @@ pub fn process_batch(
 
             thread_pool.execute(move || {
                 let file_contents = String::from_utf8_lossy(&buffer);
-                let temp = search(&config, &file_contents);
+                // let temp = search(&config, &file_contents);
+                let temp = process_lines(
+                    &config.pattern,
+                    &file_contents,
+                    config.invert,
+                    config.highlight,
+                );
 
                 if !temp.is_empty() {
                     let owned_temp: Vec<(usize, String)> = temp
@@ -138,7 +141,12 @@ pub fn process_batch(
 
                 let file_contents = String::from_utf8_lossy(&bytes);
 
-                let temp = search(&*config, &file_contents);
+                let temp = process_lines(
+                    &config.pattern,
+                    &file_contents,
+                    config.invert,
+                    config.highlight,
+                );
 
                 if temp.is_empty() {
                     return FileResult::Skip;

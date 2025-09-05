@@ -21,12 +21,7 @@ pub enum Pattern {
 
         case_insensitive: bool,
     },
-    // AhoCorasick {
-
-    // }
 }
-
-// regex len needs some solution
 
 pub struct Config {
     pub file_path: String,
@@ -36,7 +31,7 @@ pub struct Config {
     pub count: bool,
     pub line_number: bool,
     pub recursive: bool,
-    pub file_name_if_matches: bool,
+
     pub file_extension: Option<String>,
     pub highlight: bool,
 }
@@ -45,31 +40,29 @@ pub struct Output {
 }
 #[derive(Parser)]
 pub struct Args {
-    #[arg(long)]
+    #[arg(short = 'q', long)]
     pub query: Option<String>,
     #[arg(long, num_args = 1.., conflicts_with = "regex")]
     pub multiple: Vec<String>,
 
-    #[arg(long = "icase")]
+    #[arg(short = 'i', long)]
     pub ignore_case: bool,
 
     #[arg(short = 'F', long, value_name = "FILE_PATH")]
     pub file_path: Option<String>,
 
-    #[arg(short, long)]
+    #[arg(long)]
     pub invert: bool,
     #[arg(short = 'E', long, conflicts_with = "multiple")]
     pub regex: bool,
     #[arg(short = 'c', long)]
     pub count: bool,
-    #[arg(short, long)]
+    #[arg(short = 'l', long)]
     pub line_number: bool,
     #[arg(short = 'r', long)]
     pub recursive: bool,
-    #[arg(short = 'n', long)]
-    pub file_name_if_matches: bool,
-    #[arg(long, value_name = "EXTENSION")]
-    // to use you pass cargo run -- --file-extension .rs
+
+    #[arg(long = "ext", value_name = "EXTENSION")]
     pub file_extension: Option<String>,
     #[arg(long = "highlight")]
     pub highlight: bool,
@@ -146,7 +139,6 @@ impl From<Args> for Config {
             count: args.count,
             line_number: args.line_number,
             recursive: args.recursive,
-            file_name_if_matches: args.file_name_if_matches,
             file_extension,
             highlight: args.highlight,
         }

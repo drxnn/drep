@@ -1,23 +1,3 @@
-/*
-To do in order:
-1) add line numbering(print line number along each match) // done if flag is set to true
-2) add count mode( print the number of matches per file) // done if flag is set to true(only counts number of
-lines where pattern occurs not patterns matches -- maybe add later)
-3) print just the file name that contains at least 1 match // done
-
-4) add invert match(printing lines that do not match)//  done
-5) add regex support with regex-crate done
-6) add recursive with walkdir done
-7) add highlighting support, with -h flag -> use colored crates half done
-8) add option to include a file extension for files you want to check, or you dont want to check.
-
-
-optional: add support for numbers (for example flags that expect numeric values (--max-count 10))
-
-// check out aho_corasick crate for search algo for multiple string literals
-
-*/
-
 mod types;
 mod utils;
 
@@ -43,7 +23,7 @@ impl Matcher for Pattern {
         match self {
             Pattern::Regex(re) => re.is_match(text),
             Pattern::Literal { pattern, .. } => pattern.is_match(text),
-            // check if correct later
+
             Pattern::MultipleLiteral { pattern, .. } => pattern.is_match(text),
         }
     }
@@ -53,20 +33,11 @@ pub fn highlight_match(line: &str, pat: &Pattern) -> String {
     let mut highlighted_string = String::from("");
 
     match pat {
-        Pattern::Literal {
-            pattern,
-            case_insensitive,
-        }
-        | Pattern::MultipleLiteral {
-            pattern,
-            case_insensitive,
-        } => {
+        Pattern::Literal { pattern, .. } | Pattern::MultipleLiteral { pattern, .. } => {
             let matches: Vec<(usize, usize)> = pattern
                 .find_iter(line)
                 .map(|m| (m.start(), m.end()))
                 .collect();
-
-            // matches right now is [(0,3), (5,8), (24,27)]
 
             let mut last = 0;
             for (start, end) in matches {
@@ -100,7 +71,7 @@ pub fn highlight_match(line: &str, pat: &Pattern) -> String {
     }
 }
 
-fn process_lines<'a>(
+pub fn process_lines<'a>(
     query: &Pattern,
     contents: &'a str,
     invert: bool,
@@ -123,13 +94,105 @@ fn process_lines<'a>(
         })
         .collect()
 }
-pub fn search<'a>(config: &Config, contents: &'a str) -> Vec<(usize, Cow<'a, str>)> {
-    process_lines(&config.pattern, contents, config.invert, config.highlight)
-}
 
 #[cfg(test)]
 mod tests {
-    // test all flags work correctly
-    // text various regex patterns
-    // text error handling
+
+    use super::*;
+    use regex::Regex;
+
+    #[test]
+    fn literal_match() {
+        use crate::{Matcher, Pattern};
+        use aho_corasick::AhoCorasick;
+
+        let ac = AhoCorasick::new(&["foo"]).unwrap();
+        let pattern = Pattern::Literal {
+            pattern: ac,
+            case_insensitive: false,
+        };
+        assert!(pattern.matches_query("foo"));
+        assert!(!pattern.matches_query("Foo"));
+    }
+
+    #[test]
+    fn multiple_literal_match() {
+        use crate::{Matcher, Pattern};
+        let ac = AhoCorasick::new(&["foo", "bar"]).unwrap();
+        let pattern = Pattern::MultipleLiteral {
+            pattern: ac,
+            case_insensitive: false,
+        };
+        assert!(pattern.matches_query("foo"));
+        assert!(pattern.matches_query("bar"));
+        assert!(!pattern.matches_query("baz"));
+    }
+    #[test]
+    fn highlight_literal() {
+        use crate::{Pattern, highlight_match};
+        use aho_corasick::AhoCorasick;
+        use colored::Colorize;
+
+        let ac = AhoCorasick::new(&["foo"]).unwrap();
+        let pattern = Pattern::Literal {
+            pattern: ac,
+            case_insensitive: false,
+        };
+        let result = highlight_match("foo bar", &pattern);
+        let expected = "foo".red().underline().bold().to_string() + " bar";
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn process_lines_basic() {
+        use crate::{Pattern, process_lines};
+        use aho_corasick::AhoCorasick;
+        use std::borrow::Cow;
+
+        let ac = AhoCorasick::new(&["foo"]).unwrap();
+        let pattern = Pattern::Literal {
+            pattern: ac,
+            case_insensitive: false,
+        };
+        let text = "foo\nbar\nfoo bar";
+        let result: Vec<(usize, Cow<str>)> = process_lines(&pattern, text, false, false);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].0, 1);
+        assert_eq!(result[1].0, 3);
+    }
+
+    #[test]
+    fn invert_lines() {
+        use crate::{Pattern, process_lines};
+        use aho_corasick::AhoCorasick;
+
+        let ac = AhoCorasick::new(&["foo"]).unwrap();
+        let pattern = Pattern::Literal {
+            pattern: ac,
+            case_insensitive: false,
+        };
+        let text = "foo\nbar\nbaz";
+        let result = process_lines(&pattern, text, true, false);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].1, "bar");
+        assert_eq!(result[1].1, "baz");
+    }
+
+    #[test]
+    fn ignore_case_literal() {
+        use crate::{Matcher, Pattern};
+        use aho_corasick::AhoCorasickBuilder;
+
+        let ac = AhoCorasickBuilder::new()
+            .ascii_case_insensitive(true)
+            .build(&["foo"])
+            .unwrap();
+        let pattern = Pattern::Literal {
+            pattern: ac,
+            case_insensitive: true,
+        };
+        assert!(pattern.matches_query("FOO"));
+    }
 }

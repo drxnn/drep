@@ -5,17 +5,14 @@ extern crate num_cpus;
 mod types;
 mod utils;
 
-use dringrep::{
-    Args, Config, FileResult, ThreadPool, count_matches, print_results, process_batch, search,
+use drep::{
+    Args, Config, FileResult, ThreadPool, count_matches, print_results, process_batch,
+    process_lines,
 };
 
 use std::env;
 use std::error::Error;
 
-use std::fs;
-use std::fs::File;
-use std::io;
-use std::io::Write;
 use std::process;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -31,7 +28,6 @@ fn main() -> std::io::Result<()> {
     let config: Config = args.into();
     let start = Instant::now();
 
-    // dont need return value so we use if let
     if let Err(e) = run(config) {
         eprintln!("Application error: {e}");
         process::exit(1);
@@ -67,7 +63,7 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
                 let config = Arc::clone(&config);
                 let tx = tx.clone();
                 thread_pool.execute(move || {
-                    process_batch(batch, tx, config, false);
+                    let _ = process_batch(batch, tx, config, false);
                 });
                 batch = Vec::with_capacity(BATCH_SIZE); // reset batch
             }
@@ -77,7 +73,7 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
             let tx = tx.clone();
             let config = Arc::clone(&config);
             thread_pool.execute(move || {
-                process_batch(batch, tx, config, false);
+                let _ = process_batch(batch, tx, config, false);
             });
         }
         drop(tx);
@@ -85,8 +81,6 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
         print_results(rx, config);
     } else {
-        // currently dont use threads for a single file , maybe add ?
-
         let entry = match WalkDir::new(&config.file_path)
             .max_depth(1)
             .into_iter()
@@ -103,23 +97,18 @@ fn run(config: Config) -> Result<(), Box<dyn Error>> {
             }
         };
 
-        // figure out a way to break it into chunks and feed it to the batch
-        // issue is that batch only takes directories right now
-        // how can I give batch only a part of the files contents?
-        // let contents = Arc::new()
-
         batch.push(entry);
 
         {
             let tx = tx.clone();
             let config = Arc::clone(&config);
-            process_batch(batch, tx, config, true);
+            let _ = process_batch(batch, tx, config, true);
         } // dropping config to use later
         drop(tx);
         drop(thread_pool);
         print_results(rx, config);
 
-        println!("The number of processed files was: 1");
+        // println!("The number of processed files was: {}", &file_counter_clone);
     }
 
     Ok(())
